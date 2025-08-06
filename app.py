@@ -147,44 +147,47 @@ def get_coordinates(zip_code):
 
 
 def haversine(lat1, lon1, lat2, lon2):
-    R = 6371
+    R = 3958.8  # Earth radius in miles
     dlat = radians(lat2 - lat1)
     dlon = radians(lon2 - lon1)
     a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
     c = 2 * atan2(sqrt(a), sqrt(1-a))
     return R * c
+
     
     
 @st.cache_data(ttl=3600)
-def check_fire_risk(lat, lon, radius_km=25):
+def check_fire_risk(lat, lon, radius_mi=25):
     #  Fake fire for testing purposes
-    fires = [{
-        'distance_km': 50,
-        'confidence': 'high',
-        'brightness': 400.5
-    }]
-    return fires
+    # fires = [{
+    #     'distance_mi': 4,
+    #     'confidence': 'high',
+    #     'brightness': 400.5
+    # }]
+    # return fires
 
   #real data uncomment        
- #   try:
- #       df = load_fire_data()
- #   except Exception as e:
- #       return None  # <– return None instead of []
-    
- #   fires = []
- #   for _, row in df.iterrows():
- #       fire_lat = row['latitude']
- #       fire_lon = row['longitude']
- #       distance = haversine(lat, lon, fire_lat, fire_lon)
 
- #       if distance <= radius_km:
- #           fires.append({
- #               "distance_km": round(distance, 1),
- #              "confidence": row.get('confidence', 'unknown'),
- #               "brightness": row.get('bright_ti4', 'N/A')
- #           })
+    try:
+        df = load_fire_data()
+    except Exception as e:
+        return None  # <-- return None instead of []
 
- #   return fires
+    fires = []
+    for _, row in df.iterrows():
+        fire_lat = row['latitude']
+        fire_lon = row['longitude']
+        distance = haversine(lat, lon, fire_lat, fire_lon)
+
+        if distance <= radius_mi:
+            fires.append({
+                "distance_mi": round(distance, 1),
+                "confidence": row.get('confidence', 'unknown'),
+                "brightness": row.get('bright_ti4', 'N/A')
+           })
+
+    return fires
+
 
 
 def load_fallback_shelters(state_abbr="CA"):
@@ -223,14 +226,14 @@ def get_wildfire_risk(zip_code):
     fires_nearby = check_fire_risk(lat, lon)
     if not fires_nearby:
         return (
-            f"✅ ZIP Code {zip_code} is currently at **Low Risk** — no fires within 25 km.",
+            f"✅ ZIP Code {zip_code} is currently at **Low Risk** — no fires within 25 miles.",
             lat,
             lon,
             location_name
         )
 
-    closest_fire = min(fires_nearby, key=lambda x: x['distance_km'])
-    distance = closest_fire['distance_km']
+    closest_fire = min(fires_nearby, key=lambda x: x['distance_mi'])
+    distance = closest_fire['distance_mi']
     confidence = closest_fire['confidence']
     brightness = closest_fire['brightness']
 
@@ -246,7 +249,7 @@ def get_wildfire_risk(zip_code):
 
     message = (
         f"{risk_level}\n"
-        f"🔥 Closest fire: {distance} km away\n"
+        f"🔥 Closest fire: {distance} miles away\n"
         f"Confidence: {confidence} | Brightness: {brightness}"
     )
 
@@ -298,15 +301,15 @@ if st.button("🚨 Generate My Checklist & Risk"):
 
                 if not shelters_df.empty:
                     try:
-                        shelters_df['distance_km'] = shelters_df.apply(
+                        shelters_df['distance_mi'] = shelters_df.apply(
                             lambda row: haversine(lat, lon, row['LATITUDE'], row['LONGITUDE']), axis=1
                         )
-                        nearby_shelters = shelters_df[shelters_df['distance_km'] <= 25]
+                        nearby_shelters = shelters_df[shelters_df['distance_mi'] <= 25]
                     except:
                         nearby_shelters = pd.DataFrame()
 
                     if not nearby_shelters.empty:
-                        st.subheader("🏠 Emergency Shelters Nearby (within 25 km):")
+                        st.subheader("🏠 Emergency Shelters Nearby (within 25 miles):")
 
                         # Prepare data for pydeck
                         shelters_map_df = nearby_shelters[['LATITUDE', 'LONGITUDE']].rename(
@@ -349,7 +352,7 @@ if st.button("🚨 Generate My Checklist & Risk"):
                             tooltip={"html": "<b>Type:</b> {type}", "style": {"backgroundColor": "gray", "color": "white"}}
                         ))
 
-                        st.dataframe(nearby_shelters[['NAME', 'ADDRESS', 'CITY', 'ZIP', 'distance_km']].sort_values(by='distance_km'))
+                        st.dataframe(nearby_shelters[['NAME', 'ADDRESS', 'CITY', 'ZIP', 'distance_mi']].sort_values(by='distance_mi'))
                     else:
                         st.subheader("📜 Emergency Shelter Directory")
                         st.dataframe(shelters_df[['NAME', 'ADDRESS', 'CITY', 'ZIP']].sort_values(by='CITY'))
